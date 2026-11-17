@@ -5,6 +5,10 @@ from fastapi.responses import JSONResponse
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import Optional
+
+# Only import TextRequest from schema to avoid ImportError
 from schema import TextRequest
 
 load_dotenv()  # Load environment variables from .env file
@@ -19,13 +23,20 @@ if not model:
 
 app = FastAPI(
     title="Module 1 - API Interaction of AI Tutor Project",
-    description="This API allows interaction with the Gemini API for generating text based on a given topic, course, and student level.",
+    description="This API allows interaction with the Gemini API for generating text, images, audio, video analysis, and code debugging.",
     version="1.0.0"
 )
 
 ai_client = genai.Client(api_key=gemini_api_key)
 
-# Text input to generate explanation for the topic, course, and student level
+# Define CodeRequest directly here to fix the import error
+class CodeRequest(BaseModel):
+    code_snippet: str
+    language: str
+    error_message: Optional[str] = None
+
+
+# 1. Text input to generate explanation
 @app.post("/generate_text")
 async def generate_explanation(request: TextRequest):
     prompt = f"""
@@ -44,7 +55,8 @@ async def generate_explanation(request: TextRequest):
     """
 
     try:
-        response = await ai_client.models.generate_content(
+        # Removed 'await' here
+        response = ai_client.models.generate_content(
             model=model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -58,7 +70,8 @@ async def generate_explanation(request: TextRequest):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# Academic Image Analysis and Explanation
+
+# 2. Academic Image Analysis and Explanation
 @app.post("/analyze_image")
 async def analyze_image(file: UploadFile = File(...), question: str = Form(...)):
     if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
@@ -79,7 +92,8 @@ async def analyze_image(file: UploadFile = File(...), question: str = Form(...))
         3. "related_concepts": list of strings (concepts related to the image and question)
         """
 
-        response = await ai_client.models.generate_content(
+        # Removed 'await' here
+        response = ai_client.models.generate_content(
             model=model,
             contents=[prompt, image_input],
             config=types.GenerateContentConfig(
@@ -93,7 +107,8 @@ async def analyze_image(file: UploadFile = File(...), question: str = Form(...))
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# Text Question and Audio Answer Evaluation
+
+# 3. Text Question and Audio Answer Evaluation
 @app.post("/evaluate_audio_answer")
 async def evaluate_audio_answer(file: UploadFile = File(...), question: str = Form(...)):
     if file.content_type not in ["audio/mpeg", "audio/wav"]:
@@ -114,7 +129,8 @@ async def evaluate_audio_answer(file: UploadFile = File(...), question: str = Fo
         3. "feedback": string (constructive feedback for improvement)
         """
 
-        response = await ai_client.models.generate_content(
+        # Removed 'await' here
+        response = ai_client.models.generate_content(
             model=model,
             contents=[prompt, audio_input],
             config=types.GenerateContentConfig(
@@ -128,7 +144,8 @@ async def evaluate_audio_answer(file: UploadFile = File(...), question: str = Fo
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-# Video Analysis and Generate 3 MCQ Questions
+
+# 4. Video Analysis and Generate 3 MCQ Questions
 @app.post("/analyze_video")
 async def analyze_video(file: UploadFile = File(...), question: str = Form(...)):
     if file.content_type not in ["video/mp4", "video/avi"]:
@@ -149,11 +166,48 @@ async def analyze_video(file: UploadFile = File(...), question: str = Form(...))
         2. "mcq_questions": list of objects with "question", "options" (list of strings), and "correct_answer" (string)
         """
 
-        response = await ai_client.models.generate_content(
+        # Removed 'await' here
+        response = ai_client.models.generate_content(
             model=model,
             contents=[prompt, video_input],
             config=types.GenerateContentConfig(
                 temperature=0.7,
+                response_mime_type="application/json"
+            )
+        )
+        response_json = json.loads(response.text)
+        return JSONResponse(status_code=200, content=response_json)
+    
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# 5. Code Debugger & Coding Assistant
+@app.post("/debug_code")
+async def debug_code(request: CodeRequest):
+    prompt = f"""
+    You are an AI coding tutor helping a computer science student debug their code.
+    Language: "{request.language}"
+    Code Snippet:
+    {request.code_snippet}
+    
+    Error Message / Issue: "{request.error_message or 'Not specified'}"
+
+    Analyze the code, find the bug, and provide a corrected version.
+    Output a valid JSON response containing:
+    1. "has_bug": boolean
+    2. "bug_explanation": string (clear step-by-step explanation of what went wrong)
+    3. "fixed_code": string (the corrected code snippet)
+    4. "time_complexity": string (e.g., O(n), O(n^2) of the fixed algorithm)
+    """
+
+    try:
+        # Removed 'await' here
+        response = ai_client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2, 
                 response_mime_type="application/json"
             )
         )
